@@ -9,10 +9,10 @@ import { Calendar as CalendarIcon, Clock, User, MapPin } from "lucide-react";
 import { format } from "date-fns";
 
 export const TherapyScheduler = () => {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedTime, setSelectedTime] = useState<string>("");
-  const [selectedTherapy, setSelectedTherapy] = useState<string>("");
-  const [selectedRoom, setSelectedRoom] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedTherapy, setSelectedTherapy] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState("");
 
   const therapies = [
     { id: "abhyanga", name: "Abhyanga (Oil Massage)", duration: "90 min" },
