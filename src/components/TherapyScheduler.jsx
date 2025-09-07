@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,20 +7,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Calendar as CalendarIcon, Clock, User, MapPin } from "lucide-react";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 export const TherapyScheduler = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedTherapy, setSelectedTherapy] = useState("");
   const [selectedRoom, setSelectedRoom] = useState("");
+  const [therapies, setTherapies] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [practitioners, setPractitioners] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  const therapies = [
-    { id: "abhyanga", name: "Abhyanga (Oil Massage)", duration: "90 min" },
-    { id: "shirodhara", name: "Shirodhara (Oil Pouring)", duration: "60 min" },
-    { id: "steam", name: "Steam Therapy", duration: "45 min" },
-    { id: "nasya", name: "Nasya (Nasal Therapy)", duration: "30 min" },
-    { id: "karna", name: "Karna Purna (Ear Therapy)", duration: "45 min" }
-  ];
+  useEffect(() => {
+    loadSchedulerData();
+  }, []);
+
+  const loadSchedulerData = async () => {
+    try {
+      // Load therapy types
+      const { data: therapyData, error: therapyError } = await db.getTherapyTypes();
+      if (therapyError) throw therapyError;
+      setTherapies(therapyData || []);
+
+      // Load treatment rooms
+      const { data: roomData, error: roomError } = await db.getTreatmentRooms();
+      if (roomError) throw roomError;
+      setRooms(roomData || []);
+
+      // Load practitioners
+      const { data: practitionerData, error: practitionerError } = await db.getPractitioners();
+      if (practitionerError) throw practitionerError;
+      setPractitioners(practitionerData || []);
+
+    } catch (error) {
+      console.error('Error loading scheduler data:', error);
+      toast({
+        title: 'Error loading data',
+        description: 'Please try refreshing the page.',
+        variant: 'destructive'
+      });
+    }
+  };
 
   const timeSlots = [
     "9:00 AM", "10:30 AM", "12:00 PM", "1:30 PM", 
@@ -34,14 +66,89 @@ export const TherapyScheduler = () => {
     { id: "room4", name: "Steam Room", type: "Specialized" }
   ];
 
-  const handleSchedule = () => {
-    console.log("Scheduling therapy:", {
-      date: selectedDate,
-      time: selectedTime,
-      therapy: selectedTherapy,
-      room: selectedRoom
-    });
-    // Here you would typically save to database via Supabase
+  const handleSchedule = async () => {
+    if (!user) {
+      toast({
+        title: 'Please log in',
+        description: 'You need to be logged in to schedule appointments.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!selectedDate || !selectedTime || !selectedTherapy || !selectedRoom) {
+      toast({
+        title: 'Missing information',
+        description: 'Please select all required fields.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const selectedTherapyData = therapies.find(t => t.id === selectedTherapy);
+      const selectedRoomData = rooms.find(r => r.id === selectedRoom);
+      
+      // Convert time to 24-hour format
+      const [time, period] = selectedTime.split(' ');
+      let [hours, minutes] = time.split(':');
+      hours = parseInt(hours);
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      
+      const startTime = `${hours.toString().padStart(2, '0')}:${minutes}`;
+      
+      // Calculate end time based on therapy duration
+      const durationMinutes = selectedTherapyData?.duration_minutes || 60;
+      const endDate = new Date(selectedDate);
+      endDate.setHours(hours, parseInt(minutes));
+      endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+      const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+
+      const appointmentData = {
+        patient_id: user.id,
+        practitioner_id: practitioners[0]?.id || null, // Auto-assign first available practitioner
+        therapy_type_id: selectedTherapy,
+        room_id: selectedRoom,
+        appointment_date: format(selectedDate, 'yyyy-MM-dd'),
+        start_time: startTime,
+        end_time: endTime,
+        status: 'scheduled'
+      };
+
+      const { data, error } = await db.createAppointment(appointmentData);
+      if (error) throw error;
+
+      // Create notification for the appointment
+      await db.createNotification({
+        user_id: user.id,
+        title: 'Appointment Scheduled',
+        message: `Your ${selectedTherapyData?.name} session has been scheduled for ${format(selectedDate, 'PPP')} at ${selectedTime}`,
+        type: 'appointment_reminder',
+        scheduled_for: new Date(selectedDate).toISOString()
+      });
+
+      toast({
+        title: 'Appointment Scheduled!',
+        description: `Your ${selectedTherapyData?.name} session has been booked for ${format(selectedDate, 'PPP')} at ${selectedTime}`,
+      });
+
+      // Reset form
+      setSelectedTime("");
+      setSelectedTherapy("");
+      setSelectedRoom("");
+      
+    } catch (error) {
+      console.error('Error scheduling appointment:', error);
+      toast({
+        title: 'Scheduling failed',
+        description: error.message || 'Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -72,7 +179,8 @@ export const TherapyScheduler = () => {
                 onClick={() => setSelectedTherapy(therapy.id)}
               >
                 <h4 className="font-medium text-card-foreground">{therapy.name}</h4>
-                <p className="text-sm text-muted-foreground">{therapy.duration}</p>
+                <p className="text-sm text-muted-foreground">{therapy.duration_minutes} minutes</p>
+                <p className="text-sm text-muted-foreground mt-1">${therapy.price}</p>
               </div>
             ))}
           </div>
@@ -174,10 +282,10 @@ export const TherapyScheduler = () => {
           <div className="flex gap-3">
             <Button 
               className="flex-1 bg-gradient-primary"
-              disabled={!selectedDate || !selectedTime || !selectedTherapy || !selectedRoom}
+              disabled={!selectedDate || !selectedTime || !selectedTherapy || !selectedRoom || loading}
               onClick={handleSchedule}
             >
-              Schedule Therapy Session
+              {loading ? 'Scheduling...' : 'Schedule Therapy Session'}
             </Button>
             <Dialog>
               <DialogTrigger asChild>

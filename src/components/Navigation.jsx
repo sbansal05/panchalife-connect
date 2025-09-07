@@ -2,11 +2,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, User, Calendar, BarChart3 } from "lucide-react";
+import { Menu, User, Calendar, BarChart3, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { AuthForm } from "@/components/auth/AuthForm";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 export const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const { user, profile, signOut, loading } = useAuth();
 
   const navigation = [
     { name: "Home", href: "/" },
@@ -46,13 +51,43 @@ export const Navigation = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" size="sm">
-              <User className="h-4 w-4 mr-2" />
-              Login
-            </Button>
-            <Button size="sm" className="bg-gradient-primary hover:shadow-glow">
-              Get Started
-            </Button>
+            {!loading && (
+              <>
+                {user ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-foreground">
+                      <User className="h-4 w-4" />
+                      <span className="text-sm">{profile?.full_name || user.email}</span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={signOut}
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowAuth(true)}
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      Login
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      className="bg-gradient-primary hover:shadow-glow"
+                      onClick={() => setShowAuth(true)}
+                    >
+                      Get Started
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -74,20 +109,50 @@ export const Navigation = () => {
                     {item.name}
                   </Link>
                 ))}
-                <div className="mt-8 space-y-4">
-                  <Button variant="outline" className="w-full">
-                    <User className="h-4 w-4 mr-2" />
-                    Login
-                  </Button>
-                  <Button className="w-full bg-gradient-primary hover:shadow-glow">
-                    Get Started
-                  </Button>
-                </div>
+                 <div className="mt-8 space-y-4">
+                   {!loading && (
+                     <>
+                       {user ? (
+                         <Button 
+                           variant="outline" 
+                           className="w-full"
+                           onClick={signOut}
+                         >
+                           <LogOut className="h-4 w-4 mr-2" />
+                           Sign Out
+                         </Button>
+                       ) : (
+                         <>
+                           <Button 
+                             variant="outline" 
+                             className="w-full"
+                             onClick={() => setShowAuth(true)}
+                           >
+                             <User className="h-4 w-4 mr-2" />
+                             Login
+                           </Button>
+                           <Button 
+                             className="w-full bg-gradient-primary hover:shadow-glow"
+                             onClick={() => setShowAuth(true)}
+                           >
+                             Get Started
+                           </Button>
+                         </>
+                       )}
+                     </>
+                   )}
+                 </div>
               </nav>
             </SheetContent>
           </Sheet>
-        </div>
-      </div>
-    </nav>
+         </div>
+       </div>
+
+       <Dialog open={showAuth} onOpenChange={setShowAuth}>
+         <DialogContent className="sm:max-w-md">
+           <AuthForm onSuccess={() => setShowAuth(false)} />
+         </DialogContent>
+       </Dialog>
+     </nav>
   );
 };

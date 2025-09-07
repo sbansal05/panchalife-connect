@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -5,15 +6,78 @@ import { Progress } from "@/components/ui/progress";
 import { Calendar, Bell, Activity, FileText, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { Navigation } from "@/components/Navigation";
 import { TherapyScheduler } from "@/components/TherapyScheduler";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/supabase";
+import { AuthForm } from "@/components/auth/AuthForm";
+import { useToast } from "@/hooks/use-toast";
 
 const PatientDashboard = () => {
-  const upcomingSession = {
-    therapy: "Abhyanga (Oil Massage)",
-    date: "Today, 2:00 PM",
-    practitioner: "Dr. Priya Sharma",
-    room: "Therapy Room 2",
-    status: "confirmed"
+  const [appointments, setAppointments] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [progressRecords, setProgressRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user, profile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (user && !authLoading) {
+      loadDashboardData();
+    }
+  }, [user, authLoading]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load appointments
+      const { data: appointmentsData, error: appointmentsError } = await db.getAppointments(user.id, 'patient');
+      if (appointmentsError) throw appointmentsError;
+      setAppointments(appointmentsData || []);
+
+      // Load notifications
+      const { data: notificationsData, error: notificationsError } = await db.getNotifications(user.id);
+      if (notificationsError) throw notificationsError;
+      setNotifications(notificationsData || []);
+
+      // Load progress records
+      const { data: progressData, error: progressError } = await db.getProgressRecords(user.id);
+      if (progressError) throw progressError;
+      setProgressRecords(progressData || []);
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      toast({
+        title: 'Error loading data',
+        description: 'Please try refreshing the page.',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle">
+        <Navigation />
+        <div className="container mx-auto px-4 py-24">
+          <div className="max-w-md mx-auto">
+            <AuthForm />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const upcomingSession = appointments.find(apt => apt.status === 'confirmed') || null;
 
   const therapyProgress = {
     current: 8,
@@ -57,7 +121,9 @@ const PatientDashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Patient Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, Arjun Mehta. Here's your therapy progress and upcoming sessions.</p>
+          <p className="text-muted-foreground">
+            Welcome back, {profile?.full_name || 'Patient'}. Here's your therapy progress and upcoming sessions.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

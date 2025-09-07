@@ -1,8 +1,8 @@
-# Welcome to your Lovable project
+# Ayursutra - Panchakarma Management Platform
 
-## Project info
+🌿 **Complete Healthcare Management System** with Supabase backend integration.
 
-**URL**: https://lovable.dev/projects/ac4d909c-124a-48cf-8b14-324e77c2e901
+**Live URL**: https://lovable.dev/projects/ac4d909c-124a-48cf-8b14-324e77c2e901
 
 ## How can I edit this code?
 
